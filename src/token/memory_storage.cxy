@@ -1,0 +1,44 @@
+module memory_storage
+
+import { HashMap } from "stdlib/hash.cxy"
+import { TokenResponse, TokenStorage } from "./models.cxy"
+
+// MemoryStorage is an in-memory implementation of TokenStorage
+// Tokens are stored in a HashMap and lost when the program exits
+pub class MemoryStorage: TokenStorage {
+    - _tokens: HashMap[String, TokenResponse]
+
+    func `init`() {
+        _tokens = HashMap[String, TokenResponse]()
+    }
+
+    func save(key: String, token: TokenResponse): void {
+        _tokens.[&&key] = &&token
+    }
+
+    func load(key: String): Optional[TokenResponse] {
+        var result = _tokens.get(&&key)
+        if !result {
+            return None[TokenResponse]()
+        }
+        return __copy!(*result)
+    }
+
+    func remove(key: String): void {
+        _tokens.remove(&&key)
+    }
+
+    func clear(): void {
+        _tokens.clear()
+    }
+
+    // Get number of stored tokens
+    func size(): u64 {
+        return _tokens.size()
+    }
+
+    // Check if storage has a token for the given key
+    func has(key: String): bool {
+        return _tokens.contains(&key)
+    }
+}

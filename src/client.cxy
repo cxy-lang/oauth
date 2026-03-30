@@ -1,0 +1,200 @@
+module client
+
+import { Session, Request, Form } from "stdlib/fetch.cxy"
+import { Method } from "stdlib/http.cxy"
+import { parse as parseJson } from "stdlib/json.cxy"
+import { HashMap } from "stdlib/hash.cxy"
+
+import { OAuthConfig } from "./config.cxy"
+import { TokenResponse } from "./token/models.cxy"
+import { generateCodeVerifier, generateCodeChallenge, generateState } from "./utils/crypto.cxy"
+import {
+    InvalidStateError,
+    MissingAuthorizationCodeError,
+    MissingStateError,
+    NetworkError,
+    InvalidResponseError,
+    parseOAuthError
+} from "./utils/errors.cxy"
+
+// OAuth error response from provider
+@json(partial: true)
+struct OAuthErrorResponse {
+    error: String = null
+    @json(name: "error_description")
+    errorDescription: String? = null
+}
+
+// OAuthClient handles OAuth 2.0 authorization flows
+pub class OAuthClient {
+    _config: OAuthConfig
+    _state: String?
+    _codeVerifier: String?
+
+    func `init`(config: OAuthConfig) {
+        _config = &&config
+        _state = null
+        _codeVerifier = null
+    }
+
+    // Get the authorization URL to redirect the user to
+    func getAuthorizationUrl(customState: String? = null): !String {
+        // Generate or use provided state
+        if !!customState {
+            _state = *customState
+        } else {
+            _state = generateState()
+        }
+
+        // Build authorization URL
+        var url = String()
+        url << _config.authorizationEndpoint
+        url << "?response_type=code"
+        url << "&client_id=" << _config.clientId
+        url << "&redirect_uri=" << _config.redirectUri
+        url << "&state=" << *_state
+
+        // Add scopes
+        var scopeStr = _config.scopeString()
+        if scopeStr.size() > 0 {
+            url << "&scope=" << scopeStr
+        }
+
+        // Add PKCE if enabled
+        if _config.usePKCE {
+            _codeVerifier = generateCodeVerifier()
+            var challenge = generateCodeChallenge(*_codeVerifier)
+            url << "&code_challenge=" << challenge
+            url << "&code_challenge_method=" << _config.pkceMethod
+        }
+
+        return url
+    }
+
+    // Handle the OAuth callback with query parameters from the request
+    func handleCallback(params: &HashMap[String, String]): !TokenResponse {
+        var code = params.get("code".S)
+        var state = params.get("state".S)
+        var error = params.get("error".S)
+        var errorDesc = params.get("error_description".S)
+
+        // Check for error response
+        if !!error {
+            var desc = errorDesc || *error
+            parseOAuthError(error&.__str(), desc.__str())
+        }
+
+        // Validate state
+        if !state {
+            raise MissingStateError()
+        }
+        if !_state {
+            raise InvalidStateError("No state was set - call getAuthorizationUrl first".S)
+        }
+        if *state != *_state {
+            raise InvalidStateError("State mismatch - possible CSRF attack".S)
+        }
+
+        // Validate code
+        if !code {
+            raise MissingAuthorizationCodeError()
+        }
+
+        // Exchange code for tokens
+        return exchangeCode(__copy!(*code))
+    }
+
+    // Exchange authorization code for tokens
+    func exchangeCode(code: String): !TokenResponse {
+        var form = Form("".S)
+        form.add("grant_type".S, "authorization_code".S)
+        form.add("code".S, &&code)
+        form.add("redirect_uri".S, _config.redirectUri)
+        form.add("client_id".S, _config.clientId)
+
+        if !!_config.clientSecret {
+            form.add("client_secret".S, *_config.clientSecret)
+        }
+
+        if !!_codeVerifier {
+            form.add("code_verifier".S, *_codeVerifier)
+        }
+
+        return requestToken(&&form)
+    }
+
+    // Refresh an access token using a refresh token
+    func refreshToken(token: String): !TokenResponse {
+        var form = Form("".S)
+        form.add("grant_type".S, "refresh_token".S)
+        form.add("refresh_token".S, &&token)
+        form.add("client_id".S, _config.clientId)
+
+        if !!_config.clientSecret {
+            form.add("client_secret".S, *_config.clientSecret)
+        }
+
+        return requestToken(&&form)
+    }
+
+    // Make token request to OAuth provider
+    @private
+    func requestToken(form: Form): !TokenResponse {
+        var session = Session.create(_config.providerUrl.__str())
+        session.userAgent("Cxy-OAuth/0.1.0")
+
+        var response = session.perform(Method.Post, _config.tokenPath.__str(), (req: &Request): !void => {
+            req.header("Accept".S, "application/json".S)
+            req.setForm(__copy!(form))
+            req.header("Content-Type".S, "application/x-www-form-urlencoded".S)
+        })
+
+        var body = response.body()
+        if body == null {
+            raise InvalidResponseError("Empty response from token endpoint".S)
+        }
+
+        var bodyStr = body.__str()
+
+        // Check for error response
+        if !response.ok() {
+            var errorResp = parseJson[OAuthErrorResponse](bodyStr) catch {
+                raise NetworkError(f"Token request failed with status {response.statusCode()}")
+            }
+
+            if errorResp.error != null {
+                var desc = errorResp.errorDescription || errorResp.error
+                parseOAuthError(errorResp.error.__str(), desc.__str())
+            }
+
+            raise NetworkError(f"Token request failed with status {response.statusCode()}")
+        }
+
+        // Parse successful response
+        var token = parseJson[TokenResponse](bodyStr) catch {
+            raise InvalidResponseError("Failed to parse token response".S)
+        }
+
+        if token.accessToken == null {
+            raise InvalidResponseError("No access_token in response".S)
+        }
+
+        return token
+    }
+
+    // Get the current config
+    func config(): &OAuthConfig {
+        return &_config
+    }
+
+    // Check if we have a pending authorization
+    func hasPendingAuth(): bool {
+        return !!_state
+    }
+
+    // Clear pending authorization state
+    func clearState() {
+        _state = null
+        _codeVerifier = null
+    }
+}

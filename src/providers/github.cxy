@@ -1,0 +1,105 @@
+module github
+
+import { Session, Request } from "stdlib/fetch.cxy"
+import { Method } from "stdlib/http.cxy"
+import { parse as parseJson } from "stdlib/json.cxy"
+import { OAuthConfig } from "../config.cxy"
+import { NetworkError } from "../utils/errors.cxy"
+
+// GitHub OAuth 2.0 endpoints
+const GITHUB_PROVIDER_URL = "https://github.com"
+const GITHUB_AUTH_ENDPOINT = "https://github.com/login/oauth/authorize"
+const GITHUB_TOKEN_PATH = "/login/oauth/access_token"
+const GITHUB_API_URL = "https://api.github.com"
+
+// GitHub user profile returned from /user endpoint
+@json(partial: true)
+pub struct GitHubUser {
+    id: i64 = 0
+    login: String = null
+    email: String? = null
+    name: String? = null
+    @json(name: "avatar_url")
+    avatarUrl: String? = null
+    @json(name: "html_url")
+    htmlUrl: String? = null
+    bio: String? = null
+    company: String? = null
+    location: String? = null
+    @json(name: "public_repos")
+    publicRepos: i64 = 0
+    followers: i64 = 0
+    following: i64 = 0
+}
+
+// Fetch GitHub user profile using access token
+pub func getGitHubUser(accessToken: String): !GitHubUser {
+    var session = Session.create(GITHUB_API_URL)
+    session.userAgent("Cxy-OAuth/0.1.0")
+
+    var response = session.perform(Method.Get, "/user".s, (req: &Request): !void => {
+        req.header("Accept".S, "application/json".S)
+        req.header("Authorization".S, f"Bearer {accessToken}")
+    })
+
+    if !response.ok() {
+        raise NetworkError(f"Failed to fetch GitHub user: {response.statusCode()}")
+    }
+
+    var body = response.body()
+    if body == null {
+        raise NetworkError("Empty response from GitHub API".S)
+    }
+
+    return parseJson[GitHubUser](body.__str())
+}
+
+// Create OAuth configuration for GitHub
+//
+// GitHub supports the following scopes:
+//   - user: Read user profile data
+//   - user:email: Read user email addresses
+//   - repo: Full access to repositories
+//   - public_repo: Access to public repositories only
+//   - read:org: Read organization membership
+//
+// Example usage:
+//   var config = GitHub("client_id", "client_secret", "https://myapp.com/callback")
+//   config.scopes.push("user".S)
+//   config.scopes.push("repo".S)
+//
+pub func GitHub(clientId: String, clientSecret: String, redirectUri: String): OAuthConfig {
+    var config = OAuthConfig()
+    config.clientId = &&clientId
+    config.clientSecret = &&clientSecret
+    config.redirectUri = &&redirectUri
+    config.authorizationEndpoint = String(GITHUB_AUTH_ENDPOINT)
+    config.providerUrl = String(GITHUB_PROVIDER_URL)
+    config.tokenPath = String(GITHUB_TOKEN_PATH)
+    config.usePKCE = false  // GitHub doesn't require PKCE
+    config.scopes.push("user".S)  // Default scope
+    return config
+}
+
+// Create OAuth configuration for GitHub with custom scopes
+pub func GitHubWithScopes(
+    clientId: String,
+    clientSecret: String,
+    redirectUri: String,
+    scopes: [String]
+): OAuthConfig {
+    var config = OAuthConfig()
+    config.clientId = &&clientId
+    config.clientSecret = &&clientSecret
+    config.redirectUri = &&redirectUri
+    config.authorizationEndpoint = String(GITHUB_AUTH_ENDPOINT)
+    config.providerUrl = String(GITHUB_PROVIDER_URL)
+    config.tokenPath = String(GITHUB_TOKEN_PATH)
+    config.usePKCE = false
+
+    for scope, _ in scopes {
+        config.scopes.push(scope)
+    }
+
+    return config
+}

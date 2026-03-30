@@ -1,0 +1,152 @@
+module errors
+
+// OAuth 2.0 protocol exceptions (RFC 6749)
+pub exception InvalidRequestError(msg: String = null) {
+    if msg == null {
+        msg = "Invalid OAuth request".S
+    }
+    return msg.str()
+}
+
+pub exception InvalidClientError(msg: String = null) {
+    if msg == null {
+        msg = "Invalid client credentials".S
+    }
+    return msg.str()
+}
+
+pub exception InvalidGrantError(msg: String = null) {
+    if msg == null {
+        msg = "Invalid authorization grant".S
+    }
+    return msg.str()
+}
+
+pub exception UnauthorizedClientError(msg: String = null) {
+    if msg == null {
+        msg = "Client is not authorized".S
+    }
+    return msg.str()
+}
+
+pub exception UnsupportedGrantTypeError(msg: String = null) {
+    if msg == null {
+        msg = "Grant type is not supported".S
+    }
+    return msg.str()
+}
+
+pub exception InvalidScopeError(msg: String = null) {
+    if msg == null {
+        msg = "Invalid scope".S
+    }
+    return msg.str()
+}
+
+pub exception AccessDeniedError(msg: String = null) {
+    if msg == null {
+        msg = "Access denied by user or authorization server".S
+    }
+    return msg.str()
+}
+
+// Client-side exceptions
+pub exception InvalidStateError(msg: String = null) {
+    if msg == null {
+        msg = "Invalid state parameter - possible CSRF attack".S
+    }
+    return msg.str()
+}
+
+pub exception InvalidCallbackError(msg: String = null) {
+    if msg == null {
+        msg = "Invalid callback URL".S
+    }
+    return msg.str()
+}
+
+pub exception MissingAuthorizationCodeError(msg: String = null) {
+    if msg == null {
+        msg = "Authorization code is missing from callback".S
+    }
+    return msg.str()
+}
+
+pub exception MissingStateError(msg: String = null) {
+    if msg == null {
+        msg = "State parameter is missing from callback".S
+    }
+    return msg.str()
+}
+
+pub exception TokenExpiredError(msg: String = null) {
+    if msg == null {
+        msg = "Access token has expired".S
+    }
+    return msg.str()
+}
+
+pub exception MissingRefreshTokenError(msg: String = null) {
+    if msg == null {
+        msg = "Refresh token is missing".S
+    }
+    return msg.str()
+}
+
+// Network/HTTP exceptions
+pub exception NetworkError(msg: String = null) {
+    if msg == null {
+        msg = "Network request failed".S
+    }
+    return msg.str()
+}
+
+pub exception HttpError(status: i32, msg: String = null) {
+    if msg == null {
+        msg = f"HTTP error {status}"
+    }
+    return msg.str()
+}
+
+pub exception InvalidResponseError(msg: String = null) {
+    if msg == null {
+        msg = "Invalid response from OAuth provider".S
+    }
+    return msg.str()
+}
+
+// Validation exceptions
+pub exception ValidationError(msg: String = null) {
+    if msg == null {
+        msg = "Validation failed".S
+    }
+    return msg.str()
+}
+
+pub exception ConfigurationError(msg: String = null) {
+    if msg == null {
+        msg = "Invalid OAuth configuration".S
+    }
+    return msg.str()
+}
+
+// Parse OAuth error from provider response and raise appropriate exception
+pub func parseOAuthError(errorCode: __string, description: __string): !void {
+    if errorCode == "invalid_request".s {
+        raise InvalidRequestError(String(description))
+    } else if errorCode == "invalid_client".s {
+        raise InvalidClientError(String(description))
+    } else if errorCode == "invalid_grant".s {
+        raise InvalidGrantError(String(description))
+    } else if errorCode == "unauthorized_client".s {
+        raise UnauthorizedClientError(String(description))
+    } else if errorCode == "unsupported_grant_type".s {
+        raise UnsupportedGrantTypeError(String(description))
+    } else if errorCode == "invalid_scope".s {
+        raise InvalidScopeError(String(description))
+    } else if errorCode == "access_denied".s {
+        raise AccessDeniedError(String(description))
+    } else {
+        raise InvalidResponseError(f"Unknown OAuth error: {errorCode} - {description}")
+    }
+}

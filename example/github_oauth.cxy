@@ -1,0 +1,151 @@
+// GitHub OAuth Example
+//
+// This example demonstrates how to use the @oauth library to implement
+// GitHub login in a web application.
+//
+// To run this example:
+// 1. Create a GitHub OAuth App at https://github.com/settings/developers
+// 2. Set the callback URL to http://localhost:8080/callback
+// 3. Set environment variables:
+//    - GITHUB_CLIENT_ID
+//    - GITHUB_CLIENT_SECRET
+// 4. Run: cxy run example/github_oauth.cxy
+//
+import { Server, Config, Request, Response, Status } from "stdlib/http.cxy"
+import { Address } from "stdlib/net.cxy"
+import { getenv } from "stdlib/os.cxy"
+import { HashMap } from "stdlib/hash.cxy"
+
+import { OAuthClient } from "../src/client.cxy"
+import { GitHub, getGitHubUser } from "../src/providers/github.cxy"
+import { TokenResponse } from "../src/token/models.cxy"
+
+// Simple server type (no middleware)
+type Endpoint = Server
+
+// Global OAuth client (in production, use proper state management)
+var oauth: OAuthClient = null
+
+func main(): !void {
+    // Get credentials from environment
+    var clientId = getenv("GITHUB_CLIENT_ID") catch {
+        println("Error: GITHUB_CLIENT_ID environment variable not set")
+        return
+    }
+
+    var clientSecret = getenv("GITHUB_CLIENT_SECRET") catch {
+        println("Error: GITHUB_CLIENT_SECRET environment variable not set")
+        return
+    }
+
+    // Create OAuth client with GitHub configuration
+    var config = GitHub(
+        String(clientId),
+        String(clientSecret),
+        "http://localhost:8080/callback".S
+    )
+
+    // Add additional scopes if needed
+    config.scopes.push("user:email".S)
+
+    oauth = OAuthClient(&&config)
+
+    // Create HTTP server
+    var server = Endpoint(Config{address: Address("0.0.0.0", 8080)})
+
+    // Home page
+    server("GET /", (@unused req: &const Request, resp: &Response) => {
+        resp.header("Content-Type".S, "text/html".S)
+        resp.body() << "<!DOCTYPE html><html><head><title>GitHub OAuth Example</title></head>"
+        resp.body() << "<body><h1>GitHub OAuth Example</h1>"
+        resp.body() << "<p><a href=\"/login\">Login with GitHub</a></p>"
+        resp.body() << "</body></html>"
+    })
+
+    // Login route - redirects to GitHub
+    server("GET /login", (@unused req: &const Request, resp: &Response) => {
+        var authUrl = oauth.getAuthorizationUrl() catch {
+            resp.end(Status.InternalError)
+            resp.body() << "Failed to generate authorization URL"
+            return
+        }
+
+        resp.redirect(authUrl.__str())
+    })
+
+    // Callback route - handles GitHub redirect
+    server("GET /callback", (req: &const Request, resp: &Response) => {
+        // Build params map from query parameters
+        var params = HashMap[String, String]()
+
+        var code = req.qparam("code".s)
+        if !!code && !code&.empty() {
+            params.["code".S] = String(__copy!(*code))
+        }
+
+        var state = req.qparam("state".s)
+        if !!state && !state&.empty() {
+            params.["state".S] = String(__copy!(*state))
+        }
+
+        var error = req.qparam("error".s)
+        if !!error && !error&.empty() {
+            params.["error".S] = String(__copy!(*error))
+        }
+
+        var errorDesc = req.qparam("error_description".s)
+        if !!errorDesc && !errorDesc&.empty() {
+            params.["error_description".S] = String(__copy!(*errorDesc))
+        }
+
+        // Handle the callback
+        var tokens = oauth.handleCallback(&params) catch {
+            resp.header("Content-Type".S, "text/html".S)
+            resp.body() << "<!DOCTYPE html><html><head><title>Login Failed</title></head>"
+            resp.body() << "<body><h1>Login Failed</h1>"
+            resp.body() << "<p>Error: " << ex!.what() << "</p>"
+            resp.body() << "<p><a href=\"/\">Try again</a></p>"
+            resp.body() << "</body></html>"
+            return
+        }
+
+        // Fetch user info from GitHub
+        var user = getGitHubUser(tokens.accessToken) catch {
+            resp.header("Content-Type".S, "text/html".S)
+            resp.body() << "<!DOCTYPE html><html><head><title>Login Successful</title></head>"
+            resp.body() << "<body><h1>Login Successful!</h1>"
+            resp.body() << "<p>Got token but failed to fetch user info: " << ex!.what() << "</p>"
+            resp.body() << "<p><a href=\"/\">Home</a></p>"
+            resp.body() << "</body></html>"
+            oauth.clearState()
+            return
+        }
+
+        // Success! Display user info
+        resp.header("Content-Type".S, "text/html".S)
+        resp.body() << "<!DOCTYPE html><html><head><title>Welcome</title></head>"
+        resp.body() << "<body><h1>Welcome, " << user.login << "!</h1>"
+        if !!user.avatarUrl {
+            resp.body() << "<p><img src=\"" << *user.avatarUrl << "\" width=\"100\" /></p>"
+        }
+        if !!user.name {
+            resp.body() << "<p>Name: " << *user.name << "</p>"
+        }
+        if !!user.email {
+            resp.body() << "<p>Email: " << *user.email << "</p>"
+        }
+        resp.body() << "<p>GitHub ID: " << user.id << "</p>"
+        resp.body() << "<p>Followers: " << user.followers << " | Following: " << user.following << "</p>"
+        resp.body() << "<p><a href=\"" << *user.htmlUrl << "\">View GitHub Profile</a></p>"
+        resp.body() << "<p><a href=\"/\">Home</a></p>"
+        resp.body() << "</body></html>"
+
+        // Clear OAuth state
+        oauth.clearState()
+    }).setAttrs({ parseQueryParams: true })
+
+    println("Server running at http://localhost:8080")
+    println("Visit http://localhost:8080/login to start OAuth flow")
+
+    server.start()
+}

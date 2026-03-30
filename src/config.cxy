@@ -1,0 +1,144 @@
+module config
+
+import { Vector } from "stdlib/vector.cxy"
+
+// OAuthConfig holds the configuration for an OAuth client
+@json(partial: true)
+pub struct OAuthConfig {
+    // Required fields
+    @json(name: "client_id")
+    clientId: String = null
+
+    @json(name: "client_secret")
+    clientSecret: String? = null      // Optional for public clients
+
+    @json(name: "redirect_uri")
+    redirectUri: String = null
+
+    // Provider endpoints
+    @json(name: "authorization_endpoint")
+    authorizationEndpoint: String = null
+
+    @json(name: "provider_url")
+    providerUrl: String = null          // Base URL like "https://github.com"
+
+    @json(name: "token_path")
+    tokenPath: String = null            // Path like "/login/oauth/access_token"
+
+    @json(name: "revocation_path")
+    revocationPath: String? = null
+
+    // Optional settings
+    scopes: Vector[String] = Vector[String]()
+
+    @json(name: "use_pkce")
+    usePKCE: bool = true
+
+    @json(name: "pkce_method")
+    pkceMethod: String = "S256".S     // "S256" or "plain"
+
+    func `init`() {}
+
+    // Validation
+    func isValid(): bool {
+        if clientId == null {
+            return false
+        }
+        if redirectUri == null {
+            return false
+        }
+        if authorizationEndpoint == null {
+            return false
+        }
+        if providerUrl == null {
+            return false
+        }
+        if tokenPath == null {
+            return false
+        }
+        return true
+    }
+
+    // Get scopes as space-separated string (OAuth format)
+    func scopeString(): String {
+        if scopes.empty() {
+            return "".S
+        }
+
+        var result = String()
+        for scope, idx in scopes {
+            if idx > 0 {
+                result << " "
+            }
+            result << scope
+        }
+        return result
+    }
+
+    // Check if this is a public client (no secret)
+    func isPublicClient(): bool {
+        return !clientSecret
+    }
+}
+
+// Builder for creating OAuthConfig with fluent API
+pub class OAuthConfigBuilder {
+    - _config: OAuthConfig
+
+    func `init`(clientId: String, redirectUri: String) {
+        _config = OAuthConfig()
+        _config.clientId = &&clientId
+        _config.redirectUri = &&redirectUri
+    }
+
+    func authorizationEndpoint(url: String): &This {
+        _config.authorizationEndpoint = &&url
+        return this
+    }
+
+    func providerUrl(url: String): &This {
+        _config.providerUrl = &&url
+        return this
+    }
+
+    func tokenPath(path: String): &This {
+        _config.tokenPath = &&path
+        return this
+    }
+
+    func revocationPath(path: String): &This {
+        _config.revocationPath = &&path
+        return this
+    }
+
+    func clientSecret(secret: String): &This {
+        _config.clientSecret = &&secret
+        return this
+    }
+
+    func scope(s: String): &This {
+        _config.scopes.push(&&s)
+        return this
+    }
+
+    func scopes(scopeList: Vector[String]): &This {
+        for s, _ in scopeList {
+            _config.scopes.push(__copy!(s))
+        }
+        return this
+    }
+
+    func usePKCE(enabled: bool): &This {
+        _config.usePKCE = enabled
+        return this
+    }
+
+    func pkceMethod(method: String): &This {
+        _config.pkceMethod = &&method
+        return this
+    }
+
+    func build(): OAuthConfig {
+        return _config
+    }
+}

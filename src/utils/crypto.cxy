@@ -1,0 +1,81 @@
+module crypto
+
+import { SHA256Digest, SHA256, RAND_bytes } from "stdlib/crypto.cxy"
+import { urlEncodeBuffer } from "stdlib/base64.cxy"
+import { Time } from "stdlib/time.cxy"
+import { Vector } from "stdlib/vector.cxy"
+
+// Remove trailing '=' padding from base64 string
+func trimPadding(str: String): String {
+    var len = str.size()
+    var newLen = len
+
+    // Count backwards to find last non-padding character
+    for i in 0..len {
+        var idx = len - 1 - i
+        if str.[<u32>idx] != '='`char {
+            newLen = idx + 1
+            break
+        }
+    }
+
+    if newLen == len {
+        return str
+    }
+
+    return String(str.substr(0, <i64>newLen))
+}
+
+// Generate a cryptographically random string for PKCE code verifier
+// RFC 7636 requires 43-128 characters, base64url encoded
+pub func generateCodeVerifier(): !String {
+    // Generate 32 random bytes (will be 43 chars when base64url encoded)
+    var bytes = RAND_bytes(32)
+
+    // Base64url encode
+    var result = String()
+    urlEncodeBuffer(&result, bytes.data(), bytes.size())
+
+    // Remove padding if any
+    return trimPadding(result)
+}
+
+// Generate PKCE code challenge from verifier using S256 method
+// challenge = BASE64URL(SHA256(verifier))
+pub func generateCodeChallenge(verifier: String): !String {
+    // SHA-256 hash the verifier
+    var digest = SHA256Digest{}
+    var verifierStr = verifier.__str()
+    SHA256(&digest, verifierStr.data(), verifierStr.size())
+
+    // Base64url encode the hash
+    var result = String()
+    urlEncodeBuffer(&result, digest.hash, 32)
+
+    // Remove padding if any
+    return trimPadding(result)
+}
+
+// Generate a random state parameter for CSRF protection
+// Returns a random base64url encoded string (32 bytes = 43 chars)
+pub func generateState(): !String {
+    var bytes = RAND_bytes(32)
+
+    var result = String()
+    urlEncodeBuffer(&result, bytes.data(), bytes.size())
+
+    // Remove padding if any
+    return trimPadding(result)
+}
+
+// Generate a random boundary string for multipart form data
+pub func generateBoundary(): !String {
+    var bytes = RAND_bytes(16)
+
+    var result = "----CxyOAuthBoundary".S
+    urlEncodeBuffer(&result, bytes.data(), bytes.size())
+
+    // Remove padding and append
+    var trimmed = trimPadding(&&result)
+    return &&trimmed
+}
