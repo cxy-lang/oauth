@@ -1,25 +1,28 @@
 package:
   name: oauth
-  version: 0.1.0
+  version: 0.1.1
   author: n
   description: n
   license: MIT
-
-install:
-  - name: disable-macos-wait-async-warning
-    required: true
-    script: |
-      if [ $(uname) = "Darwin" ]; then
-        # Disable macOS wait async warning
-        echo "--define=MACOS_WAIT_ASYNC_WARNING_OFF=1"
-      fi
-  - name: openssl
-    required: true
-    script: |
-      # We do not libs, cxy sources usually specify the libs they need
-      cxy package find-system openssl --include-dir --lib-dir
 
 dependencies: []
 
 tests:
   - file: "src/**/*.cxy"
+
+
+install:
+  - name: disable-macos-wait-async-warning
+    script: |
+      if [ $(uname) = "Darwin" ]; then
+        # Disable macOS wait async warning
+        echo "--define=MACOS_WAIT_ASYNC_WARNING_OFF=1"
+      fi
+
+    required: true
+  - name: openssl
+    script: |
+      # We do not libs, cxy sources usually specify the libs they need
+      cxy package find-system openssl --include-dir --lib-dir
+
+    required: true
