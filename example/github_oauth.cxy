@@ -70,7 +70,7 @@ func main(): !void {
             return
         }
 
-        resp.redirect(authUrl.__str())
+        resp.redirect(authUrl.s())
     })
 
     // Callback route - handles GitHub redirect

@@ -51,7 +51,7 @@ pub func getGitHubUser(accessToken: String): !GitHubUser {
         raise NetworkError("Empty response from GitHub API".S)
     }
 
-    return parseJson[GitHubUser](body.__str())
+    return parseJson[GitHubUser](body.s())
 }
 
 // Create OAuth configuration for GitHub

@@ -131,7 +131,7 @@ pub exception ConfigurationError(msg: String = null) {
 }
 
 // Parse OAuth error from provider response and raise appropriate exception
-pub func parseOAuthError(errorCode: __string, description: __string): !void {
+pub func parseOAuthError(errorCode: strview, description: strview): !void {
     if errorCode == "invalid_request".s {
         raise InvalidRequestError(String(description))
     } else if errorCode == "invalid_client".s {

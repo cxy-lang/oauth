@@ -1,6 +1,6 @@
 package:
   name: oauth
-  version: 0.1.3
+  version: 0.1.4
   author: Carter Mbotho<lastcarter@gmail.com>
   description: OAuth 2.0 client library for Cxy — authorization code flow, PKCE, token refresh, and built-in GitHub provider support
   license: MIT
@@ -10,6 +10,10 @@ dependencies: []
 tests:
   - file: "src/**/*.cxy"
 
+builds:
+  example:
+    entry: example/github_oauth.cxy
+    output: github_oauth
 
 install:
   - name: disable-macos-wait-async-warning

@@ -45,7 +45,7 @@ pub func generateCodeVerifier(): !String {
 pub func generateCodeChallenge(verifier: String): !String {
     // SHA-256 hash the verifier
     var digest = SHA256Digest{}
-    var verifierStr = verifier.__str()
+    var verifierStr = verifier.s()
     SHA256(&digest, verifierStr.data(), verifierStr.size())
 
     // Base64url encode the hash

@@ -95,7 +95,7 @@ func main(): !void {
             resp.end(Status.InternalError)
             return
         }
-        resp.redirect(authUrl.__str())
+        resp.redirect(authUrl.s())
     })
     
     // Callback route - exchange code for tokens

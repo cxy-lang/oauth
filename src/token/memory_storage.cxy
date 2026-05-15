@@ -16,10 +16,10 @@ pub class MemoryStorage: TokenStorage {
         _tokens.[&&key] = &&token
     }
 
-    func load(key: String): Optional[TokenResponse] {
+    func load(key: String): TokenResponse? {
         var result = _tokens.get(&&key)
         if !result {
-            return None[TokenResponse]()
+            return null
         }
         return __copy!(*result)
     }
